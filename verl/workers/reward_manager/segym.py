@@ -21,7 +21,7 @@ import os
 import sys
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any, Callable, DefaultDict
 
 import torch
 
@@ -142,7 +142,7 @@ class SEGymRewardManager(AbstractRewardManager):
             raise FileNotFoundError(f"SEGymRewardManager cannot find dataset metadata: {metadata_path}")
 
         logger.info("Loading SEGym dataset metadata from %s", abs_path)
-        with open(abs_path, "r", encoding="utf-8") as f:
+        with open(abs_path, encoding="utf-8") as f:
             for line_no, line in enumerate(f, start=1):
                 line = line.strip()
                 if not line:
@@ -272,9 +272,9 @@ class SEGymRewardManager(AbstractRewardManager):
                 f"on service {self._primary_service}"
             )
 
-        already_printed = defaultdict(int)
+        already_printed: DefaultDict[str, int] = defaultdict(int)
 
-        for ctx, reply in zip(request_context, service_payloads):
+        for ctx, reply in zip(request_context, service_payloads, strict=False):
             payload = reply.get("payload", {})
             reward_value = float(payload.get("reward", 0.0))
             detail = payload.get("detail", "")
