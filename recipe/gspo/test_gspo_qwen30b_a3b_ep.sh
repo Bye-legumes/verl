@@ -50,6 +50,16 @@ aime24_test_path=$DATA_ROOT/dataset/aime-2024.parquet
 
 TEST_FILE="['$aime24_test_path']"
 
+# SEGym reward wiring
+SEG_DATASET_PATH=${SEG_DATASET_PATH:-"/shared_workspace_mfs/zhilong/rl/pangu_38b_20251028_3490DC_1to12of16_shuffle.jsonl"}
+SEG_BOOTSTRAP=${SEG_BOOTSTRAP:-"lux-2-cyber-01:9092"}
+SEG_SERVICE=${SEG_SERVICE:-"rllm_sandbox"}
+SEG_REPO_ROOT=${SEG_REPO_ROOT:-"/shared_workspace_mfs/zhilong/rl/pgcodellm-rl-segym"}
+SEG_CLIENT_ID=${SEG_CLIENT_ID:-null}
+SEG_WAIT_TIMEOUT=${SEG_WAIT_TIMEOUT:-600}
+SEG_GETMANY_TIMEOUT=${SEG_GETMANY_TIMEOUT:-200}
+SEG_DEFAULT_TIMEOUT=${SEG_DEFAULT_TIMEOUT:-45}
+
 # Algorithm
 temperature=1.0
 top_p=1.0
@@ -146,7 +156,15 @@ python3 -m verl.trainer.main_ppo \
     +actor_rollout_ref.actor.megatron.override_transformer_config.recompute_num_layers=1 \
     +actor_rollout_ref.actor.megatron.override_transformer_config.gradient_accumulation_fusion=True \
     +actor_rollout_ref.actor.megatron.override_transformer_config.moe_permute_fusion=True \
-    reward_model.reward_manager=dapo \
+    reward_model.reward_manager=segym \
+    +reward_model.reward_kwargs.dataset_metadata_path="${SEG_DATASET_PATH}" \
+    +reward_model.reward_kwargs.segym_repo_root="${SEG_REPO_ROOT}" \
+    +reward_model.reward_kwargs.bootstrap_servers="${SEG_BOOTSTRAP}" \
+    +reward_model.reward_kwargs.service="${SEG_SERVICE}" \
+    +reward_model.reward_kwargs.client_id=${SEG_CLIENT_ID} \
+    +reward_model.reward_kwargs.wait_timeout_s=${SEG_WAIT_TIMEOUT} \
+    +reward_model.reward_kwargs.getmany_timeout_ms=${SEG_GETMANY_TIMEOUT} \
+    +reward_model.reward_kwargs.default_timeout_s=${SEG_DEFAULT_TIMEOUT} \
     +reward_model.reward_kwargs.overlong_buffer_cfg.enable=${enable_overlong_buffer} \
     +reward_model.reward_kwargs.overlong_buffer_cfg.len=${overlong_buffer_len} \
     +reward_model.reward_kwargs.overlong_buffer_cfg.penalty_factor=${overlong_penalty_factor} \
