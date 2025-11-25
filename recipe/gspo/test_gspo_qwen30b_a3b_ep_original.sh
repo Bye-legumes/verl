@@ -4,8 +4,8 @@ set -xeuo pipefail
 export NCCL_DEBUG=WARN
 # export VERL_LOGGING_LEVEL=DEBUG
 
-project_name='CodeRL'
-exp_name='GSPO-Qwen3-30B-A3B-Code'
+project_name='DAPO'
+exp_name='GSPO-Qwen3-30B-A3B-Base-MATH'
 
 adv_estimator=grpo
 
@@ -43,22 +43,12 @@ NGPUS_PER_NODE=${NGPUS_PER_NODE:-8}
 # TRAIN_FILE=${TRAIN_FILE:-"${RAY_DATA_HOME}/data/dapo-math-17k.parquet"}
 # TEST_FILE=${TEST_FILE:-"${RAY_DATA_HOME}/data/aime-2024.parquet"}
 
-MODEL_PATH="/shared_workspace_mfs/zhilong/rl/Qwen3-30B-A3B-Base"
-CKPTS_DIR=${DATA_ROOT:-/shared_workspace_mfs/zhilong/rl}/checkpoint/${project_name}/${exp_name}
-CODE_DATA_DIR=${CODE_DATA_DIR:-"/shared_workspace_mfs/zhilong/rl/data/qwen30b_code_rl"}
-TRAIN_FILE=${TRAIN_FILE:-"${CODE_DATA_DIR}/train.parquet"}
-VAL_FILE=${VAL_FILE:-"${CODE_DATA_DIR}/val.parquet"}
-TEST_FILE="['$VAL_FILE']"
+MODEL_PATH="/home/original_models/Qwen3-30B-A3B-Base"
+CKPTS_DIR=$DATA_ROOT/checkpoint/${project_name}/${exp_name}
+TRAIN_FILE=$DATA_ROOT/dataset/BytedTsinghua-SIA/DAPO-Math-17k/data/dapo-math-17k.parquet
+aime24_test_path=$DATA_ROOT/dataset/aime-2024.parquet
 
-# SEGym reward wiring
-SEG_DATASET_PATH=${SEG_DATASET_PATH:-"/shared_workspace_mfs/zhilong/rl/pangu_38b_20251028_3490DC_1to12of16_shuffle.jsonl"}
-SEG_BOOTSTRAP=${SEG_BOOTSTRAP:-"lux-2-cyber-01:9092"}
-SEG_SERVICE=${SEG_SERVICE:-"rllm_sandbox"}
-SEG_REPO_ROOT=${SEG_REPO_ROOT:-"/shared_workspace_mfs/zhilong/rl/pgcodellm-rl-segym"}
-SEG_CLIENT_ID=${SEG_CLIENT_ID:-null}
-SEG_WAIT_TIMEOUT=${SEG_WAIT_TIMEOUT:-600}
-SEG_GETMANY_TIMEOUT=${SEG_GETMANY_TIMEOUT:-200}
-SEG_DEFAULT_TIMEOUT=${SEG_DEFAULT_TIMEOUT:-45}
+TEST_FILE="['$aime24_test_path']"
 
 # Algorithm
 temperature=1.0
@@ -156,15 +146,7 @@ python3 -m verl.trainer.main_ppo \
     +actor_rollout_ref.actor.megatron.override_transformer_config.recompute_num_layers=1 \
     +actor_rollout_ref.actor.megatron.override_transformer_config.gradient_accumulation_fusion=True \
     +actor_rollout_ref.actor.megatron.override_transformer_config.moe_permute_fusion=True \
-    reward_model.reward_manager=segym \
-    +reward_model.reward_kwargs.dataset_metadata_path="${SEG_DATASET_PATH}" \
-    +reward_model.reward_kwargs.segym_repo_root="${SEG_REPO_ROOT}" \
-    +reward_model.reward_kwargs.bootstrap_servers="${SEG_BOOTSTRAP}" \
-    +reward_model.reward_kwargs.service="${SEG_SERVICE}" \
-    +reward_model.reward_kwargs.client_id=${SEG_CLIENT_ID} \
-    +reward_model.reward_kwargs.wait_timeout_s=${SEG_WAIT_TIMEOUT} \
-    +reward_model.reward_kwargs.getmany_timeout_ms=${SEG_GETMANY_TIMEOUT} \
-    +reward_model.reward_kwargs.default_timeout_s=${SEG_DEFAULT_TIMEOUT} \
+    reward_model.reward_manager=dapo \
     +reward_model.reward_kwargs.overlong_buffer_cfg.enable=${enable_overlong_buffer} \
     +reward_model.reward_kwargs.overlong_buffer_cfg.len=${overlong_buffer_len} \
     +reward_model.reward_kwargs.overlong_buffer_cfg.penalty_factor=${overlong_penalty_factor} \

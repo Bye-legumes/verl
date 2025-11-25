@@ -14,10 +14,10 @@
 set -xeuo pipefail
 
 # activate the venv
-echo "Activating verl environment..."
-eval "$(conda shell.bash hook)"
-conda deactivate
-conda activate verl
+#echo "Activating verl environment..."
+#eval "$(conda shell.bash hook)"
+#conda deactivate
+#conda activate verl
 
 # can make training faster, depends on your infrastructure
 export NCCL_IBEXT_DISABLE=1
@@ -44,7 +44,7 @@ project_name='RL-GSPO'
 adv_estimator=grpo
 loss_mode=gspo
 loss_agg_mode="seq-mean-token-mean"
-MODEL_PATH=Qwen/Qwen2.5-3B-Instruct
+MODEL_PATH="/home/original_models/Qwen2.5-3B-Instruct"
 offload=false # it's a small model, offloading will just slow-down training
 rollout_engine=vllm
 rollout_mode=sync # can be async to speedup large scale xps

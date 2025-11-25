@@ -83,6 +83,7 @@ class SEGymRewardManager(AbstractRewardManager):
         verbose_client: bool = False,
         language_field: str = "language",
         timeout_field: str = "timeout",
+        **_: Any,
     ) -> None:
         if not bootstrap_servers:
             raise ValueError("SEGymRewardManager requires `bootstrap_servers` to be set.")
