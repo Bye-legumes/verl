@@ -165,6 +165,7 @@ python3 -m verl.trainer.main_ppo \
     +reward_model.reward_kwargs.wait_timeout_s=${SEG_WAIT_TIMEOUT} \
     +reward_model.reward_kwargs.getmany_timeout_ms=${SEG_GETMANY_TIMEOUT} \
     +reward_model.reward_kwargs.default_timeout_s=${SEG_DEFAULT_TIMEOUT} \
+    +reward_model.reward_kwargs.log_rollout_samples=5 \
     +reward_model.reward_kwargs.overlong_buffer_cfg.enable=${enable_overlong_buffer} \
     +reward_model.reward_kwargs.overlong_buffer_cfg.len=${overlong_buffer_len} \
     +reward_model.reward_kwargs.overlong_buffer_cfg.penalty_factor=${overlong_penalty_factor} \

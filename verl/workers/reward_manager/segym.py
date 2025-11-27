@@ -83,6 +83,7 @@ class SEGymRewardManager(AbstractRewardManager):
         verbose_client: bool = False,
         language_field: str = "language",
         timeout_field: str = "timeout",
+        log_rollout_samples: int | None = None,
         **_: Any,
     ) -> None:
         if not bootstrap_servers:
@@ -129,6 +130,7 @@ class SEGymRewardManager(AbstractRewardManager):
         self._verbose_client = verbose_client
         self._language_field = language_field
         self._timeout_field = timeout_field
+        self._log_rollout_samples = int(log_rollout_samples or 0)
 
         self._metadata_lookup_keys = tuple(metadata_lookup_keys or ("prompt_md5hash", "dataset_problem_md5hash"))
         self._metadata_by_prompt: dict[str, dict[str, Any]] = {}
@@ -237,6 +239,7 @@ class SEGymRewardManager(AbstractRewardManager):
                     "response_length": response_len,
                     "prompt": prompt_str,
                     "response": response_str,
+                    "parsed_code": code_payload,
                     "dataset": dataset_info.dataset,
                     "dataset_index": dataset_info.index,
                 }
@@ -274,6 +277,7 @@ class SEGymRewardManager(AbstractRewardManager):
             )
 
         already_printed: DefaultDict[str, int] = defaultdict(int)
+        total_logged = 0
 
         for ctx, reply in zip(request_context, service_payloads, strict=False):
             payload = reply.get("payload", {})
@@ -292,10 +296,20 @@ class SEGymRewardManager(AbstractRewardManager):
             reward_extra_info["segym_index"].append(ctx["dataset_index"])
 
             dataset_key = ctx["dataset"]
+            should_log = False
             if already_printed[dataset_key] < self.num_examine:
                 already_printed[dataset_key] += 1
+                should_log = True
+            elif self._log_rollout_samples > 0 and total_logged < self._log_rollout_samples:
+                should_log = True
+
+            if should_log:
+                total_logged += 1
                 print("[SEGym prompt]", ctx["prompt"])
                 print("[SEGym response]", ctx["response"])
+                parsed_code = ctx.get("parsed_code", "")
+                if parsed_code:
+                    print("[SEGym parsed code]", parsed_code)
                 print("[SEGym dataset]", dataset_key, "index:", ctx["dataset_index"])
                 print("[SEGym detail]", detail)
                 print("[SEGym reward]", reward_value)
@@ -311,7 +325,13 @@ class SEGymRewardManager(AbstractRewardManager):
         try:
             extracted = self._extract_code_fn(response)
             if extracted is None:
-                logger.warning("SEGym code extraction returned None; falling back to raw response text.")
+                preview = response.strip()
+                if len(preview) > 800:
+                    preview = preview[:800] + "...<truncated>"
+                logger.warning(
+                    "SEGym code extraction returned None; falling back to raw response text. Response preview: %s",
+                    preview,
+                )
                 return response
             return str(extracted).strip()
         except Exception:  # pragma: no cover - depends on sandbox parsing
