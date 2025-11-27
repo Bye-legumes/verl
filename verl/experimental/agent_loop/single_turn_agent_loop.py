@@ -36,6 +36,8 @@ class SingleTurnAgentLoop(AgentLoopBase):
 
     async def run(self, sampling_params: dict[str, Any], **kwargs) -> AgentLoopOutput:
         messages = list(kwargs["raw_prompt"])
+        if messages and messages[0]['role'] != 'system':
+            messages.insert(0, {"role": "system", "content": "You are an expert Python programmer. You will be given a question (problem specification) and will generate a correct Python program that matches the specification and passes all tests."})
         image_data = copy.deepcopy((kwargs.get("multi_modal_data") or {}).get("image", None))
 
         metrics = {}

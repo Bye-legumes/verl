@@ -17,8 +17,8 @@ kl_loss_coef=0.0
 clip_ratio_low=3e-4
 clip_ratio_high=4e-4
 
-max_prompt_length=$((1024 * 16))
-max_response_length=$((1024 * 16))
+max_prompt_length=$((1024 * 4))
+max_response_length=$((1024 * 32))
 enable_overlong_buffer=True
 overlong_buffer_len=$((1024 * 4))
 overlong_penalty_factor=1.0
@@ -43,7 +43,7 @@ NGPUS_PER_NODE=${NGPUS_PER_NODE:-8}
 # TRAIN_FILE=${TRAIN_FILE:-"${RAY_DATA_HOME}/data/dapo-math-17k.parquet"}
 # TEST_FILE=${TEST_FILE:-"${RAY_DATA_HOME}/data/aime-2024.parquet"}
 
-MODEL_PATH="/shared_workspace_mfs/zhilong/rl/Qwen3-30B-A3B-Base"
+MODEL_PATH="/shared_workspace_mfs/zhilong/rl/Qwen3-30B-A3B-Thinking-2507"
 CKPTS_DIR=${DATA_ROOT:-/shared_workspace_mfs/zhilong/rl}/checkpoint/${project_name}/${exp_name}
 CODE_DATA_DIR=${CODE_DATA_DIR:-"/shared_workspace_mfs/zhilong/rl/data/qwen30b_code_rl"}
 TRAIN_FILE=${TRAIN_FILE:-"${CODE_DATA_DIR}/train.parquet"}

@@ -338,16 +338,16 @@ class SEGymRewardManager(AbstractRewardManager):
             elif self._log_rollout_samples > 0 and total_logged < self._log_rollout_samples:
                 should_log = True
 
-            if should_log:
-                total_logged += 1
-                print("[SEGym prompt]", ctx["prompt"])
-                print("[SEGym response]", ctx["response"])
-                parsed_code = ctx.get("parsed_code", "")
-                if parsed_code:
-                    print("[SEGym parsed code]", parsed_code)
-                print("[SEGym dataset]", dataset_key, "index:", ctx["dataset_index"])
-                print("[SEGym detail]", detail)
-                print("[SEGym reward]", reward_value)
+            # if should_log:
+            #     total_logged += 1
+            #     print("[SEGym prompt]", ctx["prompt"])
+            #     print("[SEGym response]", ctx["response"])
+            #     parsed_code = ctx.get("parsed_code", "")
+            #     if parsed_code:
+            #         print("[SEGym parsed code]", parsed_code)
+            #     print("[SEGym dataset]", dataset_key, "index:", ctx["dataset_index"])
+            #     print("[SEGym detail]", detail)
+            #     print("[SEGym reward]", reward_value)
 
         data.batch["acc"] = sample_rewards
         if return_dict:

@@ -397,9 +397,14 @@ class vLLMHttpServerBase:
     ) -> TokenOutput:
         """Generate sequence with token-in-token-out."""
         # TODO(@wuxibin): switch to `/generate` http endpoint once multi-modal support ready.
-        max_tokens = self.config.max_model_len - len(prompt_ids)
+        # TODO(@wuxibin): switch to `/generate` http endpoint once multi-modal support ready.
+        max_new_tokens = self.config.response_length
+        max_tokens = min(self.config.max_model_len - len(prompt_ids), max_new_tokens)
         sampling_params["logprobs"] = 0 if sampling_params.pop("logprobs", False) else None
         sampling_params.setdefault("repetition_penalty", self.config.get("repetition_penalty", 1.0))
+        # Remove max_tokens from sampling_params if it exists to avoid conflict
+        if "max_tokens" in sampling_params:
+            del sampling_params["max_tokens"]
         sampling_params = SamplingParams(max_tokens=max_tokens, **sampling_params)
         prompt_ids = _qwen2_5_vl_dedup_image_tokens(prompt_ids, self.model_config.processor)
         prompt = TokensPrompt(
