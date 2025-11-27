@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -xeuo pipefail
-
+export WANDB_API_KEY="7d90b5d13cbda415e350c7b12ba34b108cd615bd"
 export NCCL_DEBUG=WARN
 # export VERL_LOGGING_LEVEL=DEBUG
 
@@ -17,8 +17,8 @@ kl_loss_coef=0.0
 clip_ratio_low=3e-4
 clip_ratio_high=4e-4
 
-max_prompt_length=$((1024 * 2))
-max_response_length=$((1024 * 8))
+max_prompt_length=$((1024 * 16))
+max_response_length=$((1024 * 16))
 enable_overlong_buffer=True
 overlong_buffer_len=$((1024 * 4))
 overlong_penalty_factor=1.0
@@ -74,8 +74,8 @@ offload=True
 
 # gen
 rollout_name=vllm # vllm or sglang
-gen_tp=1
-gen_dp=4
+gen_tp=4
+gen_dp=1
 gen_ep=4
 
 # train

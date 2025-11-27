@@ -309,7 +309,11 @@ class SEGymRewardManager(AbstractRewardManager):
         if self._extract_code_fn is None:
             return response
         try:
-            return self._extract_code_fn(response).strip()
+            extracted = self._extract_code_fn(response)
+            if extracted is None:
+                logger.warning("SEGym code extraction returned None; falling back to raw response text.")
+                return response
+            return str(extracted).strip()
         except Exception:  # pragma: no cover - depends on sandbox parsing
             logger.exception("Failed to extract code from model response; falling back to raw text.")
             return response
