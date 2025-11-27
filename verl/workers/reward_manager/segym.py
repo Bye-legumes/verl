@@ -19,11 +19,14 @@ import json
 import logging
 import os
 import sys
+import uuid
 from collections import defaultdict
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any, Callable, DefaultDict
 
 import torch
+from filelock import FileLock
 
 from verl import DataProto
 from verl.workers.reward_manager import register
@@ -84,6 +87,9 @@ class SEGymRewardManager(AbstractRewardManager):
         language_field: str = "language",
         timeout_field: str = "timeout",
         log_rollout_samples: int | None = None,
+        log_responses: bool = False,
+        response_log_dir: str | None = None,
+        response_log_prefix: str = "segym_responses",
         **_: Any,
     ) -> None:
         if not bootstrap_servers:
@@ -131,6 +137,18 @@ class SEGymRewardManager(AbstractRewardManager):
         self._language_field = language_field
         self._timeout_field = timeout_field
         self._log_rollout_samples = int(log_rollout_samples or 0)
+        self._log_responses = bool(log_responses)
+        self._response_log_path = None
+        self._response_log_lock: FileLock | None = None
+        if self._log_responses:
+            default_dir = "/shared_workspace_mfs/zhilong/rl/outputs"
+            log_dir = response_log_dir or os.getenv("SEGYM_RESPONSE_LOG_DIR", default_dir)
+            log_dir = os.path.join(log_dir, "segym_responses")
+            os.makedirs(log_dir, exist_ok=True)
+            timestamp = datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+            filename = f"{response_log_prefix}_{os.getpid()}_{timestamp}.jsonl"
+            self._response_log_path = os.path.join(log_dir, filename)
+            self._response_log_lock = FileLock(self._response_log_path + ".lock")
 
         self._metadata_lookup_keys = tuple(metadata_lookup_keys or ("prompt_md5hash", "dataset_problem_md5hash"))
         self._metadata_by_prompt: dict[str, dict[str, Any]] = {}
@@ -242,6 +260,14 @@ class SEGymRewardManager(AbstractRewardManager):
                     "parsed_code": code_payload,
                     "dataset": dataset_info.dataset,
                     "dataset_index": dataset_info.index,
+                    "log_id": self._log_sample_event(
+                        event_type="response",
+                        dataset=dataset_info.dataset,
+                        dataset_index=dataset_info.index,
+                        prompt=prompt_str,
+                        response=response_str,
+                        parsed_code=code_payload,
+                    ),
                 }
             )
 
@@ -294,6 +320,15 @@ class SEGymRewardManager(AbstractRewardManager):
             reward_extra_info["segym_time"].append(elapsed)
             reward_extra_info["segym_dataset"].append(ctx["dataset"])
             reward_extra_info["segym_index"].append(ctx["dataset_index"])
+            self._log_sample_event(
+                event_type="reward",
+                log_id=ctx.get("log_id"),
+                dataset=ctx["dataset"],
+                dataset_index=ctx["dataset_index"],
+                detail=detail,
+                reward=reward_value,
+                elapsed=elapsed,
+            )
 
             dataset_key = ctx["dataset"]
             should_log = False
@@ -382,10 +417,27 @@ class SEGymRewardManager(AbstractRewardManager):
             value = extra_info.get(key)
             if not value:
                 continue
-            record = self._metadata_by_prompt.get(str(value))
-            if record:
-                return record
-            record = self._metadata_by_problem.get(str(value))
-            if record:
-                return record
+                record = self._metadata_by_prompt.get(str(value))
+                if record:
+                    return record
+                record = self._metadata_by_problem.get(str(value))
+                if record:
+                    return record
         return None
+
+    def _log_sample_event(self, event_type: str, **payload: Any) -> str:
+        if not self._response_log_path or not self._response_log_lock:
+            # still return id for chaining when logging disabled
+            return payload.get("log_id") or uuid.uuid4().hex
+
+        log_id = payload.get("log_id") or uuid.uuid4().hex
+        entry = {
+            "timestamp": datetime.utcnow().isoformat(timespec="milliseconds") + "Z",
+            "event": event_type,
+            "log_id": log_id,
+            **{k: v for k, v in payload.items() if k != "log_id"},
+        }
+        with self._response_log_lock:
+            with open(self._response_log_path, "a", encoding="utf-8") as f:
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        return log_id

@@ -74,9 +74,9 @@ offload=True
 
 # gen
 rollout_name=vllm # vllm or sglang
-gen_tp=4
+gen_tp=2
 gen_dp=1
-gen_ep=4
+gen_ep=1
 
 # train
 train_tp=4
@@ -171,6 +171,8 @@ python3 -m verl.trainer.main_ppo \
     +reward_model.reward_kwargs.overlong_buffer_cfg.penalty_factor=${overlong_penalty_factor} \
     +reward_model.reward_kwargs.overlong_buffer_cfg.log=False \
     +reward_model.reward_kwargs.max_resp_len=${max_response_length} \
+    +reward_model.reward_kwargs.log_responses=True \
+    +reward_model.reward_kwargs.response_log_dir="/shared_workspace_mfs/zhilong/rl/outputs" \
     trainer.logger='["console","wandb"]' \
     trainer.project_name="${project_name}" \
     trainer.experiment_name="${exp_name}-tp${gen_tp}-ep${gen_ep}" \
