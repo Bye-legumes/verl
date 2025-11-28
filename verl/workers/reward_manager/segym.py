@@ -15,11 +15,15 @@
 from __future__ import annotations
 
 import asyncio
+import atexit
+import contextlib
 import json
 import logging
 import os
 import sys
+import threading
 import uuid
+import weakref
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
@@ -60,6 +64,13 @@ class _SegymDatasetInfo:
     index: int
     language: str
     timeout: int | None
+
+
+def _close_manager_atexit(manager_ref: weakref.ReferenceType["SEGymRewardManager"]) -> None:
+    manager = manager_ref()
+    if manager is not None:
+        with contextlib.suppress(Exception):
+            manager.close()
 
 
 @register("segym")
@@ -156,6 +167,20 @@ class SEGymRewardManager(AbstractRewardManager):
         if dataset_metadata_path:
             self._load_dataset_metadata(dataset_metadata_path)
 
+        self._segym_client: Any | None = None
+        self._call_lock = threading.RLock()
+        self._loop = asyncio.new_event_loop()
+        self._loop_ready = threading.Event()
+        self._loop_thread = threading.Thread(
+            target=self._run_background_loop,
+            name=f"SEGymRewardLoop-{id(self)}",
+            daemon=True,
+        )
+        self._loop_thread.start()
+        self._loop_ready.wait()
+        self._closed = False
+        atexit.register(_close_manager_atexit, weakref.ref(self))
+
     def _load_dataset_metadata(self, metadata_path: str) -> None:
         """Load the original dataset for mapping prompt hashes back to dataset/index."""
         abs_path = os.path.abspath(metadata_path)
@@ -181,12 +206,38 @@ class SEGymRewardManager(AbstractRewardManager):
                 if prob_hash:
                     self._metadata_by_problem[str(prob_hash)] = record
 
+    def _run_background_loop(self) -> None:
+        asyncio.set_event_loop(self._loop)
+        self._loop_ready.set()
+        self._loop.run_forever()
+
+    async def _get_segym_client(self):
+        if self._segym_client is None:
+            client = self._segym_client_cls(
+                self._bootstrap_servers,
+                self._services,
+                client_id=self._client_id,
+                post_topic=self._post_topic,
+                verbose=self._verbose_client,
+            )
+            try:
+                await client.init()
+            except Exception:
+                with contextlib.suppress(Exception):
+                    await client.close()
+                raise
+            self._segym_client = client
+        return self._segym_client
+
     def __call__(self, data: DataProto, return_dict: bool = False) -> torch.Tensor | dict[str, Any]:
-        loop = asyncio.new_event_loop()
-        try:
-            return loop.run_until_complete(self._compute_rewards_async(data, return_dict))
-        finally:
-            loop.close()
+        with self._call_lock:
+            if self._closed:
+                raise RuntimeError("SEGymRewardManager has been closed and cannot accept new requests.")
+            future = asyncio.run_coroutine_threadsafe(
+                self._compute_rewards_async(data, return_dict),
+                self._loop,
+            )
+            return future.result()
 
     async def _compute_rewards_async(self, data: DataProto, return_dict: bool) -> torch.Tensor | dict[str, Any]:
         # Support RM score shortcut
@@ -278,22 +329,12 @@ class SEGymRewardManager(AbstractRewardManager):
                 return {"reward_tensor": reward_tensor, "reward_extra_info": reward_extra_info}
             return reward_tensor
 
-        client = self._segym_client_cls(
-            self._bootstrap_servers,
-            self._services,
-            client_id=self._client_id,
-            post_topic=self._post_topic,
-            verbose=self._verbose_client,
+        client = await self._get_segym_client()
+        segym_results = await client.send_and_wait_for_replies(
+            msgs=request_payloads,
+            wait_timeout=self._wait_timeout_s,
+            getmany_timeout=self._getmany_timeout_ms,
         )
-        await client.init()
-        try:
-            segym_results = await client.send_and_wait_for_replies(
-                msgs=request_payloads,
-                wait_timeout=self._wait_timeout_s,
-                getmany_timeout=self._getmany_timeout_ms,
-            )
-        finally:
-            await client.close()
 
         service_payloads = segym_results.get(self._primary_service, [])
         if len(service_payloads) != len(request_context):
@@ -353,6 +394,33 @@ class SEGymRewardManager(AbstractRewardManager):
         if return_dict:
             return {"reward_tensor": reward_tensor, "reward_extra_info": reward_extra_info}
         return reward_tensor
+
+    async def _shutdown_async(self) -> None:
+        if self._segym_client is not None:
+            await self._segym_client.close()
+            self._segym_client = None
+
+    def close(self) -> None:
+        if not hasattr(self, "_loop"):
+            return
+
+        with self._call_lock:
+            if self._closed:
+                return
+            self._closed = True
+            shutdown_future = asyncio.run_coroutine_threadsafe(self._shutdown_async(), self._loop)
+            try:
+                shutdown_future.result()
+            except Exception:
+                logger.exception("Failed to gracefully close SEGym client.", exc_info=True)
+
+        self._loop.call_soon_threadsafe(self._loop.stop)
+        self._loop_thread.join(timeout=5.0)
+        self._loop.close()
+
+    def __del__(self) -> None:
+        with contextlib.suppress(Exception):
+            self.close()
 
     def _extract_code(self, response: str) -> str:
         if self._extract_code_fn is None:

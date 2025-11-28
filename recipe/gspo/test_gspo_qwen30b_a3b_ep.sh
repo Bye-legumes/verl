@@ -74,9 +74,9 @@ offload=True
 
 # gen
 rollout_name=vllm # vllm or sglang
-gen_tp=2
-gen_dp=1
-gen_ep=1
+gen_tp=1
+gen_dp=4
+gen_ep=4
 
 # train
 train_tp=4
